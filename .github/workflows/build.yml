@@ -1,7 +1,10 @@
+
 name: Build Tawseel Pro
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, master]
 
 jobs:
   build:
@@ -16,6 +19,32 @@ jobs:
           unzip -o TawseelPro-GitHub-Project.zip
           cp -a TawseelPro/. .
 
+      - name: Configure Gradle repositories
+        run: |
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven {
+                      url = uri("https://api.xposed.info/")
+                  }
+              }
+          }
+
+          rootProject.name = 'TawseelPro'
+          include ':app'
+          EOF
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,35 +55,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
-
-
-      - name: Add Xposed Maven repository
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          p = Path("settings.gradle")
-          s = p.read_text()
-
-          if "api.xposed.info" not in s:
-              pattern = r'(dependencyResolutionManagement\s*\{[\s\S]*?repositories\s*\{)'
-              replacement = (
-                  r'\1\n'
-                  '            maven { url "https://api.xposed.info/" }\n'
-                  '            maven { url "https://artifactory.appodeal.com/appodeal-public/" }'
-              )
-              s, count = re.subn(pattern, replacement, s, count=1)
-
-              if count == 0:
-                  raise SystemExit(
-                      "Could not locate dependencyResolutionManagement repositories"
-                  )
-
-              p.write_text(s)
-
-          print("Xposed repositories configured")
-          PY
 
       - name: Build APK
         run: gradle --no-daemon clean assembleDebug
